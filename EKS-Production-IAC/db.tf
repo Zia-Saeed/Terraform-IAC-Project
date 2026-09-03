@@ -17,7 +17,7 @@ resource "aws_kms_key" "db_key" {
 resource "aws_rds_cluster_parameter_group" "rds_pr_gr" {
   family = "aurora-postgresql16"
   name = "aurora-pg16-prod-cluster-pg"
-  description = ""
+  description = "paramter group or prod db for ssl and logs"
   parameter {
     name  = "rds.force_ssl"
     value = "1"
