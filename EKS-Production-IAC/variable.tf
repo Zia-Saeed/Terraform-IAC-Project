@@ -26,15 +26,23 @@ variable "availability_zones" {
 variable "pub_cidr_value" {
   type = list(string)
   default = [ 
-    "", ""
+    "192.168.1.0/24", "192.168.2.0/24", "192.168.3.0/24"
    ]
-  description = ""
+  description = "Cidr block value for public subnets"
 }
 ####
 variable "pri_cidr_value" {
   type = list(string)
   default = [
-    "", "" 
+    "192.168.10.0/24", "192.168.20.0/24", "192.168.30.0/24"
     ]
-  description = ""
+  description = "Cidr block value for private subnets"
+}
+###
+variable "db_cidr_value" {
+  type = list(string)
+  default = [ 
+    "192.168.100.0/24", "192.168.110.0/24", "192.168.120.0/24" 
+    ]
+    description = "Cidr block value for database"
 }
