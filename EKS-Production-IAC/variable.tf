@@ -46,3 +46,38 @@ variable "db_cidr_value" {
     ]
     description = "Cidr block value for database"
 }
+###
+variable "db_engine" {
+  type = string
+  default = "aurora-postgresql"
+}
+###
+variable "db_engine_mode" {
+  type = string
+  default = "provisioned"
+}
+###
+variable "db_engine_version" {
+  type = string
+  default = "16.4"
+}
+##
+variable "db_rentention_period" {
+  type = number
+  default = 30
+}
+#
+variable "db_name" {
+  type = string
+  default = "proddb"
+}
+###
+variable "db_username" {
+  type = string
+  default = "postgresqlaurora"
+}
+###
+variable "db_password" {
+  type = string
+  default = "LKJSALKJ230948KLAJSDKLJ9023"
+}

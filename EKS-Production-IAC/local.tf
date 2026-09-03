@@ -1,7 +1,7 @@
 locals {
   common_tags = {
-    Managedby = ""
-    Evn = ""
-    Owner = ""
+    Managedby = "Terraform"
+    Evn = "Production"
+    Owner = "Zia-DevOps"
   }
 }

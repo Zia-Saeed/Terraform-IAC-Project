@@ -3,7 +3,7 @@ resource "aws_vpc" "vpc_1" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
   enable_dns_support = true
-  tags = merge(locals.commom_tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.name_prefix}-vpc1"
   })
 }
@@ -78,6 +78,9 @@ resource "aws_nat_gateway" "nat_gwts" {
   count = length(var.availability_zones)
   allocation_id = aws_eip.nat_ips[count.index].id
   subnet_id = aws_subnet.public_subnets[count.index].id
+  tags = merge(local.common_tags, {
+    Name = "${var.name_prefix}-nat-gwt-${var.availability_zones[count.index]}"
+  })
 }
 ####
 resource "aws_route_table" "pri_rt" {
