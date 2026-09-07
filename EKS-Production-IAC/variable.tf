@@ -59,7 +59,7 @@ variable "db_engine_mode" {
 ###
 variable "db_engine_version" {
   type = string
-  default = "16.4"
+  default = "16"
 }
 ##
 variable "db_rentention_period" {
@@ -80,4 +80,56 @@ variable "db_username" {
 variable "db_password" {
   type = string
   default = "LKJSALKJ230948KLAJSDKLJ9023"
+}
+###
+variable "cluster_name" {
+  type = string
+  default = "prod-k8-cluster"
+}
+###
+variable "cluster_version" {
+  type = string
+  default = "1.36"
+}
+###
+variable "admin_allowed_cidrs" {
+  type = list(string)
+  description = "Public Cidr Block to Access EKS Control Plan API"
+  default = [ "59.103.46.105/32" ]
+}
+###
+variable "nodes_instance_type" {
+  type = string
+  description = "Node Instance Type"
+  default = "t3.small"
+}
+###
+variable "nodes_disk_size" {
+  type = number
+  description = "Disk Space for Node Machines"
+  default = 30
+}
+###
+variable "cluster_nodes_max_size" {
+  type = number
+  default = 4
+  description = "Max Number for Nodes"
+}
+###
+variable "cluster_node_min_size" {
+  type = number
+  default = 1
+  description = "Min Number for Nodes"
+}
+###
+variable "cluster_nodes_desired_size" {
+  type = number
+  default = 2
+  description = "Desired Values for Cluster Nodes"
+}
+###
+variable "cluster_nodes_capacity_type" {
+  type = string
+  default = "SPOT"
+  description = "instance type for cluster"
 }
