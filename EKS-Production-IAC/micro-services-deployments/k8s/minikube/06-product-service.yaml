@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: product-media-pvc
+  namespace: shopflow
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: shopflow
+  labels: { app: product-service }
+spec:
+  # Pinned to 1 replica: uploaded images live on this PVC, and a second
+  # replica mounting the same ReadWriteOnce volume either fails to schedule
+  # or (worse) both pods think they own a disk neither fully controls.
+  # Scale this past 1 only after moving image storage to S3/object storage.
+  replicas: 1
+  selector:
+    matchLabels: { app: product-service }
+  template:
+    metadata:
+      labels: { app: product-service }
+    spec:
+      # Grants group 1000 (matching the Dockerfile's pinned appuser gid)
+      # write access to the PVC once Kubernetes mounts it - without this,
+      # the mounted directory defaults to root ownership and image uploads
+      # 500 with a PermissionError, exactly like the docker-compose volume
+      # did before it was recreated.
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: product-service
+          image: eks-microservices-project-product-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef: { name: shopflow-config }
+            - secretRef: { name: shopflow-secrets }
+          env:
+            - name: DB_NAME
+              value: "productdb"
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+          readinessProbe:
+            httpGet: { path: /health/, port: 8002 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/, port: 8002 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+      volumes:
+        - name: media
+          persistentVolumeClaim: { claimName: product-media-pvc }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: shopflow
+spec:
+  selector: { app: product-service }
+  ports:
+    - port: 8002
+      targetPort: 8002
+      nodePort: 30002   # fixed port so its minikube URL doesn't change between restarts
+  type: NodePort   # exposed directly (not just through api-gateway) so uploaded images are browser-reachable - see PUBLIC_MEDIA_BASE_URL in 03-secrets-configmap.yaml

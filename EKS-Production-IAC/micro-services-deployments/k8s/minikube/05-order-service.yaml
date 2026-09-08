@@ -5,7 +5,7 @@ metadata:
   namespace: shopflow
   labels: { app: order-service }
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels: { app: order-service }
   template:
@@ -14,7 +14,12 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/shopflow/order-service:latest
+          # Built directly into minikube's Docker daemon (see the guide's
+          # "eval $(minikube docker-env)" step) - no registry involved, so
+          # imagePullPolicy must be Never or Kubernetes will try (and fail)
+          # to pull "order-service:local" from Docker Hub.
+          image: eks-microservices-project-order-service:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8003
           envFrom:
@@ -32,8 +37,8 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 20
           resources:
-            requests: { cpu: "100m", memory: "192Mi" }
-            limits: { cpu: "500m", memory: "384Mi" }
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
 ---
 apiVersion: v1
 kind: Service
