@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: shopflow
+  labels: { app: notification-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: notification-service }
+  template:
+    metadata:
+      labels: { app: notification-service }
+    spec:
+      containers:
+        - name: notification-service
+          # Built directly into minikube's Docker daemon (see the guide's
+          # "eval $(minikube docker-env)" step) - no registry involved, so
+          # imagePullPolicy must be Never or Kubernetes will try (and fail)
+          # to pull "notification-service:local" from Docker Hub.
+          image: notification-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef: { name: shopflow-config }
+            - secretRef: { name: shopflow-secrets }
+          env:
+            - name: DB_NAME
+              value: "notifdb"
+          readinessProbe:
+            httpGet: { path: /health/, port: 8004 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/, port: 8004 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: shopflow
+spec:
+  selector: { app: notification-service }
+  ports:
+    - port: 8004
+      targetPort: 8004
+  type: ClusterIP

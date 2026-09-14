@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: shopflow
+  labels: { app: api-gateway }
+spec:
+  replicas: 2   # stateless proxy, no PVC - safe to run multiple
+  selector:
+    matchLabels: { app: api-gateway }
+  template:
+    metadata:
+      labels: { app: api-gateway }
+    spec:
+      containers:
+        - name: api-gateway
+          image: api-gateway:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: shopflow-config }
+            - secretRef: { name: shopflow-secrets }
+          readinessProbe:
+            httpGet: { path: /health/, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/, port: 8000 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+# THE ONE SERVICE THE FRONTEND TALKS TO. Every other Service in this
+# folder is ClusterIP (cluster-internal only, by design) - api-gateway is
+# the single deliberate exception, exposed via NodePort so it's reachable
+# from your browser/frontend outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: shopflow
+spec:
+  selector: { app: api-gateway }
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30000   # fixed port so its minikube URL doesn't change between restarts
+  type: NodePort

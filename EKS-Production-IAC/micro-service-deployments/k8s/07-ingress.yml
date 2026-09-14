@@ -1,0 +1,91 @@
+# Replaces the Django api-gateway for EKS: the ALB itself does the
+# path-based routing that api-gateway/core/views.py used to do in Python,
+# via the AWS Load Balancer Controller watching this single Ingress resource.
+#
+# api-gateway's CODE and Dockerfile still exist in this project and are
+# still used by docker-compose and k8s/minikube/ (no ALB there, nothing
+# to hand this job to) - this file just means EKS specifically no longer
+# deploys or routes through it.
+#
+# Why this still works exactly like before, with zero frontend/backend code
+# changes:
+#  - The browser only ever talks to ONE hostname (the ALB's DNS/your custom
+#    domain) - same as when it only knew api-gateway's hostname. Path-based
+#    routing happens invisibly inside the ALB.
+#  - The Authorization: Bearer <JWT> header passes through the ALB
+#    untouched - each service still verifies it itself via
+#    StatelessJWTAuthentication, exactly as it always has.
+#  - order-service's calls to product-service/notification-service (stock
+#    reservation, order-confirmed events) never went through api-gateway to
+#    begin with - those are direct in-cluster calls via ClusterIP DNS, so
+#    they're completely unaffected by this change.
+#  - CORS: since the browser is now calling each service directly (via the
+#    ALB), CORS_ALLOWED_ORIGINS in shopflow-config needs to be correct on
+#    EVERY service, not just one gateway - it already is, since every
+#    service's settings.py has had django-cors-headers configured from the
+#    start. No code change needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopflow-ingress
+  namespace: shopflow
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # No HTTPS listener here - that requires an ACM cert, which requires
+    # owning a domain to validate. You're testing from localhost right now
+    # (plain HTTP page, no mixed-content restriction), so this is fine.
+    # If you DO get a domain later: add back
+    #   alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+    #   alb.ingress.kubernetes.io/ssl-redirect: '443'
+    #   alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:..."
+    # Applied uniformly to every target group below - safe here because
+    # all 4 services expose the same /health/ convention.
+    alb.ingress.kubernetes.io/healthcheck-path: /health/
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/users
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service
+                port: { number: 8001 }
+          - path: /api/products
+            pathType: Prefix
+            backend:
+              service:
+                name: product-service
+                port: { number: 8002 }
+          - path: /api/categories
+            pathType: Prefix
+            backend:
+              service:
+                name: product-service
+                port: { number: 8002 }
+          # Django admin for product-service specifically - every service has
+          # its own /admin/ (different models registered per app), so this
+          # rule intentionally only exposes product-service's. If you need
+          # another service's admin too, add a separate rule pointing at it -
+          # you can't share one /admin path across multiple backend services.
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: product-service
+                port: { number: 8002 }
+          - path: /api/orders
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port: { number: 8003 }
+          - path: /api/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port: { number: 8004 }

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: shopflow
+  labels: { app: user-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: user-service }
+  template:
+    metadata:
+      labels: { app: user-service }
+    spec:
+      containers:
+        - name: user-service
+          # Built directly into minikube's Docker daemon (see the guide's
+          # "eval $(minikube docker-env)" step) - no registry involved, so
+          # imagePullPolicy must be Never or Kubernetes will try (and fail)
+          # to pull "user-service:local" from Docker Hub.
+          image: user-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef: { name: shopflow-config }
+            - secretRef: { name: shopflow-secrets }
+          env:
+            - name: DB_NAME
+              value: "userdb"
+          readinessProbe:
+            httpGet: { path: /health/, port: 8001 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/, port: 8001 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: shopflow
+spec:
+  selector: { app: user-service }
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP

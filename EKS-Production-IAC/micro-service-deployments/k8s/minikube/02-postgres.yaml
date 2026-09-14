@@ -1,0 +1,90 @@
+# ============================================================
+# Postgres as a StatefulSet, not a Deployment.
+#
+# Why this matters for a database specifically:
+#  - Each pod gets a STABLE, predictable identity (postgres-0, postgres-1...)
+#    instead of a random one that changes every reschedule.
+#  - `volumeClaimTemplates` below makes Kubernetes auto-create a UNIQUELY
+#    NAMED PVC per replica (postgres-data-postgres-0) that follows that
+#    specific pod across restarts/reschedules - you never hand-manage a
+#    shared PVC the way you would with a Deployment.
+#  - Pods start up and shut down in order (postgres-0 before postgres-1,
+#    etc.), which matters the moment you add a replica that needs the
+#    primary to exist first.
+# This is 1 replica for now, so the practical day-to-day behavior is close
+# to what the Deployment version did - but this is the correct foundation
+# if you ever add read replicas or switch to a Postgres operator later.
+# ============================================================
+
+# A "headless" Service (clusterIP: None) is what gives each StatefulSet pod
+# its own stable DNS name: postgres-0.postgres.shopflow.svc.cluster.local.
+# Your Django services don't need that per-pod addressing at 1 replica -
+# they just connect to DB_HOST=postgres like before - but the headless
+# Service is what StatefulSet requires as its `serviceName` regardless.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: shopflow
+spec:
+  clusterIP: None
+  selector: { app: postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: shopflow
+spec:
+  serviceName: postgres          # must match the headless Service above
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef: { name: shopflow-secrets }
+          env:
+            - name: POSTGRES_MULTIPLE_DATABASES
+              value: "userdb,productdb,orderdb,notifdb"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata   # avoids Postgres complaining about lost+found in the volume root
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: postgres-init-scripts
+            defaultMode: 0755
+  # This is the StatefulSet-specific piece: instead of one PVC you create
+  # and reference by name, Kubernetes stamps out a PVC from this template
+  # for EACH replica (postgres-data-postgres-0, and postgres-data-postgres-1
+  # if you scale to replicas: 2, etc.), using minikube's default
+  # StorageClass to dynamically provision the underlying PersistentVolume.
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
